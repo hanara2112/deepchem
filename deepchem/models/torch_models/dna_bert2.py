@@ -210,6 +210,7 @@ class DNABERT2(HuggingFaceModel):
                 model_path,
                 config=hf_config,
                 trust_remote_code=True,
+                low_cpu_mem_usage=False,
             )
 
         elif task in ("regression", "mtr"):
@@ -219,6 +220,7 @@ class DNABERT2(HuggingFaceModel):
                 model_path,
                 config=hf_config,
                 trust_remote_code=True,
+                low_cpu_mem_usage=False,
             )
 
         elif task == "classification":
@@ -232,6 +234,7 @@ class DNABERT2(HuggingFaceModel):
                 model_path,
                 config=hf_config,
                 trust_remote_code=True,
+                low_cpu_mem_usage=False,
             )
 
         elif task == "feature_extractor":
@@ -239,6 +242,7 @@ class DNABERT2(HuggingFaceModel):
                 model_path,
                 config=hf_config,
                 trust_remote_code=True,
+                low_cpu_mem_usage=False,
             )
 
         else:
