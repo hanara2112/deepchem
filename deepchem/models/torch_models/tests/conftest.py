@@ -64,3 +64,44 @@ def protein_classification_dataset(tmpdir):
                                featurizer=dc.feat.DummyFeaturizer())
     dataset = loader.create_dataset(filepath)
     return dataset
+
+
+@pytest.fixture
+def dna_classification_dataset(tmpdir):
+    """Minimal 4-sequence binary DNA classification dataset."""
+    sequences = [
+        "ATCGATCGATCGATCG",
+        "GCTAGCTAGCTAGCTA",
+        "AAAAGGGGCCCCTTTT",
+        "TTTTCCCCGGGGAAAA",
+    ]
+    labels = [0, 1, 0, 1]
+    df = pd.DataFrame(list(zip(sequences, labels)),
+                      columns=["sequence", "label"])
+    filepath = os.path.join(tmpdir, "dna_cls.csv")
+    df.to_csv(filepath)
+    loader = dc.data.CSVLoader(["label"],
+                               feature_field="sequence",
+                               featurizer=dc.feat.DummyFeaturizer())
+    return loader.create_dataset(filepath)
+
+
+@pytest.fixture
+def dna_regression_dataset(tmpdir):
+    """Minimal 4-sequence DNA regression dataset."""
+    sequences = [
+        "ATCGATCGATCGATCG",
+        "GCTAGCTAGCTAGCTA",
+        "AAAAGGGGCCCCTTTT",
+        "TTTTCCCCGGGGAAAA",
+    ]
+    labels = [0.5, 1.2, 0.8, 1.7]
+    df = pd.DataFrame(list(zip(sequences, labels)),
+                      columns=["sequence", "label"])
+    filepath = os.path.join(tmpdir, "dna_reg.csv")
+    df.to_csv(filepath)
+    loader = dc.data.CSVLoader(["label"],
+                               feature_field="sequence",
+                               featurizer=dc.feat.DummyFeaturizer())
+    return loader.create_dataset(filepath)
+
