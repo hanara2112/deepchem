@@ -195,16 +195,33 @@ class DNABERT2(HuggingFaceModel):
             "pad_token_id": tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0,
             "bos_token_id": getattr(tokenizer, "bos_token_id", None),
             "eos_token_id": getattr(tokenizer, "eos_token_id", None),
-            # Disable triton-based flash attention — it is incompatible with
-            # newer triton / torch versions shipped on platforms like Kaggle.
-            "use_flash_attn": False,
         }
         for attr, default in _DNABERT2_CONFIG_DEFAULTS.items():
             if not hasattr(hf_config, attr):
                 setattr(hf_config, attr, default)
-            elif attr == "use_flash_attn":
-                # Always force flash attention off for portability
-                setattr(hf_config, attr, False)
+
+        # ------------------------------------------------------------------
+        # Disable DNABERT-2's triton-based flash attention.
+        # The custom bert_layers.py gates flash attention via:
+        #   ``if self.p_dropout or flash_attn_qkvpacked_func is None``
+        # When triton is installed (bundled with PyTorch >=2.0) the import
+        # succeeds but compilation fails on newer triton versions.  We
+        # neutralise the import so ``flash_attn_qkvpacked_func`` stays None,
+        # which forces the safe PyTorch attention path.
+        # ------------------------------------------------------------------
+        import sys
+        import types
+        _fake_flash = types.ModuleType("flash_attn_triton")
+        _fake_flash.flash_attn_qkvpacked_func = None  # type: ignore[attr-defined]
+        # Patch sys.modules to prevent future imports of flash_attn_triton
+        for _key in list(sys.modules.keys()):
+            if "flash_attn_triton" in _key:
+                sys.modules[_key] = _fake_flash
+        # Also patch the already-imported bert_layers module directly so
+        # that the module-level ``flash_attn_qkvpacked_func`` variable is None
+        for _key, _mod in list(sys.modules.items()):
+            if "bert_layers" in _key and hasattr(_mod, "flash_attn_qkvpacked_func"):
+                _mod.flash_attn_qkvpacked_func = None  # type: ignore[attr-defined]
 
         # ------------------------------------------------------------------
         # Task-conditioned model head
