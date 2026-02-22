@@ -175,6 +175,32 @@ class DNABERT2(HuggingFaceModel):
         )
 
         # ------------------------------------------------------------------
+        # Load config and patch missing standard attributes.
+        # DNABERT-2 uses a custom BertConfig that may not include defaults
+        # like `is_decoder` and `pad_token_id` that newer versions of
+        # `transformers` expect.  We load the config first, patch in the
+        # missing fields, then set any task-specific overrides before
+        # passing it to `from_pretrained`.
+        # ------------------------------------------------------------------
+        hf_config = AutoConfig.from_pretrained(
+            model_path,
+            trust_remote_code=True,
+            **config_dict,
+        )
+
+        # Patch standard BERT config defaults that DNABERT-2's custom
+        # configuration_bert.py may omit.
+        _DNABERT2_CONFIG_DEFAULTS: Dict[str, Any] = {
+            "is_decoder": False,
+            "pad_token_id": tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0,
+            "bos_token_id": getattr(tokenizer, "bos_token_id", None),
+            "eos_token_id": getattr(tokenizer, "eos_token_id", None),
+        }
+        for attr, default in _DNABERT2_CONFIG_DEFAULTS.items():
+            if not hasattr(hf_config, attr):
+                setattr(hf_config, attr, default)
+
+        # ------------------------------------------------------------------
         # Task-conditioned model head
         # ------------------------------------------------------------------
         model: PreTrainedModel
@@ -182,18 +208,13 @@ class DNABERT2(HuggingFaceModel):
         if task == "mlm":
             model = AutoModelForMaskedLM.from_pretrained(
                 model_path,
+                config=hf_config,
                 trust_remote_code=True,
-                **config_dict,
             )
 
         elif task in ("regression", "mtr"):
-            hf_config = AutoConfig.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                num_labels=n_tasks,
-                problem_type="regression",
-                **config_dict,
-            )
+            hf_config.num_labels = n_tasks
+            hf_config.problem_type = "regression"
             model = AutoModelForSequenceClassification.from_pretrained(
                 model_path,
                 config=hf_config,
@@ -202,16 +223,11 @@ class DNABERT2(HuggingFaceModel):
 
         elif task == "classification":
             if n_tasks == 1:
-                problem_type = "single_label_classification"
+                hf_config.problem_type = "single_label_classification"
+                hf_config.num_labels = 2
             else:
-                problem_type = "multi_label_classification"
-            hf_config = AutoConfig.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                num_labels=n_tasks if n_tasks > 1 else 2,
-                problem_type=problem_type,
-                **config_dict,
-            )
+                hf_config.problem_type = "multi_label_classification"
+                hf_config.num_labels = n_tasks
             model = AutoModelForSequenceClassification.from_pretrained(
                 model_path,
                 config=hf_config,
@@ -221,8 +237,8 @@ class DNABERT2(HuggingFaceModel):
         elif task == "feature_extractor":
             model = AutoModel.from_pretrained(
                 model_path,
+                config=hf_config,
                 trust_remote_code=True,
-                **config_dict,
             )
 
         else:
