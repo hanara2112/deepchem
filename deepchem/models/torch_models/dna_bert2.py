@@ -200,6 +200,13 @@ class DNABERT2(HuggingFaceModel):
             if not hasattr(hf_config, attr):
                 setattr(hf_config, attr, default)
 
+        # Force a tiny nonzero attention dropout to bypass triton flash
+        # attention.  DNABERT-2's code uses the PyTorch path when
+        # ``self.p_dropout`` is truthy.  The value 1e-8 is negligible but
+        # ensures the safe PyTorch attention is always selected.
+        if getattr(hf_config, "attention_probs_dropout_prob", 0.0) == 0.0:
+            hf_config.attention_probs_dropout_prob = 1e-8
+
         # ------------------------------------------------------------------
         # Disable DNABERT-2's triton-based flash attention.
         # The custom bert_layers.py gates flash attention via:
@@ -414,5 +421,11 @@ class DNABERT2(HuggingFaceModel):
         input_ids = input_ids.to(self.device)
         attention_mask = attention_mask.to(self.device)
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        # DNABERT-2's custom BertModel may return a tuple instead of a
+        # ModelOutput object.  Handle both cases.
+        if isinstance(outputs, tuple):
+            hidden_states = outputs[0]
+        else:
+            hidden_states = outputs.last_hidden_state
         # Return the CLS token (position 0) of the last hidden layer
-        return outputs.last_hidden_state[:, 0, :]
+        return hidden_states[:, 0, :]
