@@ -195,10 +195,16 @@ class DNABERT2(HuggingFaceModel):
             "pad_token_id": tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0,
             "bos_token_id": getattr(tokenizer, "bos_token_id", None),
             "eos_token_id": getattr(tokenizer, "eos_token_id", None),
+            # Disable triton-based flash attention — it is incompatible with
+            # newer triton / torch versions shipped on platforms like Kaggle.
+            "use_flash_attn": False,
         }
         for attr, default in _DNABERT2_CONFIG_DEFAULTS.items():
             if not hasattr(hf_config, attr):
                 setattr(hf_config, attr, default)
+            elif attr == "use_flash_attn":
+                # Always force flash attention off for portability
+                setattr(hf_config, attr, False)
 
         # ------------------------------------------------------------------
         # Task-conditioned model head
@@ -387,6 +393,9 @@ class DNABERT2(HuggingFaceModel):
             raise RuntimeError(
                 "get_embeddings() is only available when task='feature_extractor'. "
                 f"Current task: '{self.task}'.")
+        # Ensure inputs are on the same device as the model
+        input_ids = input_ids.to(self.device)
+        attention_mask = attention_mask.to(self.device)
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
         # Return the CLS token (position 0) of the last hidden layer
         return outputs.last_hidden_state[:, 0, :]
